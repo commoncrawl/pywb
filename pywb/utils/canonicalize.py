@@ -1,6 +1,9 @@
 """ Standard url-canonicalzation, surt and non-surt
 """
 
+import re
+import sys
+
 import surt
 import six.moves.urllib.parse as urlparse
 
@@ -38,6 +41,13 @@ def canonicalize(url, surt_ordered=True):
     'urn:some:id'
     """
     try:
+        if '%3F' in url:
+            m = re.match('(https?://[^?%/]+)%3F(.*)', url)
+            if m:
+                fixed_url = m.group(1) + '/?' + m.group(2)
+                sys.stderr.write('Fixed URL: {}\n        -> {}\n'.format(url, fixed_url))
+                url = fixed_url
+
         key = surt.surt(url)
     except Exception as e:  #pragma: no cover
         # doesn't happen with surt from 0.3b
