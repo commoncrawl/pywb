@@ -131,6 +131,16 @@ class DefaultRecordParser(object):
     def create_payload_buffer(self, entry):
         return None
 
+    @staticmethod
+    def escape_string(s):
+        return ''.join(DefaultRecordParser.escape_non_printable_char(c) for c in s)
+
+    @staticmethod
+    def escape_non_printable_char(c):
+        if c <= '\x7f':
+            return c.encode('unicode_escape').decode('ascii')
+        return r'\x{0:02x}'.format(ord(c))
+
     def create_record_iter(self, raw_iter):
         append_post = self.options.get('append_post')
         include_all = self.options.get('include_all')
@@ -197,6 +207,35 @@ class DefaultRecordParser(object):
                 if not buff:
                     break
                 self.handle_payload(buff)
+
+            ### read remaining input from underlying decompression stream
+            last_buff = None
+            while True:
+                buff = raw_iter.reader.readline()
+                if not buff:
+                    break
+                if last_buff and len(last_buff):
+                    sys.stderr.write("Adding remaining content from stream: {}\t({})\n".format(
+                        DefaultRecordParser.escape_string(last_buff), record.rec_headers.get_header('uri')))
+                    self.handle_payload(last_buff)
+                last_buff = buff
+            trailing_newline = False
+            if last_buff is not None:
+                if last_buff == '\n':
+                    # Ok, a single trailing '\n' is expected
+                    # sys.stderr.write("Stripped trailing \\n\t({})\n".format(record.rec_headers.get_header('uri')))
+                    trailing_newline = True
+                elif len(last_buff) > 1 and last_buff[-1] == '\n':
+                    sys.stderr.write("Adding remaining content from stream (stripped trailing \\n): {}\t({})\n".format(
+                        DefaultRecordParser.escape_string(last_buff[:-1]), record.rec_headers.get_header('uri')))
+                    self.handle_payload(last_buff[:-1])
+                    trailing_newline = True
+                elif len(last_buff) > 0:
+                    sys.stderr.write("Adding remaining content from stream (without trailing \\n): {}\t({})\n".format(
+                        DefaultRecordParser.escape_string(last_buff), record.rec_headers.get_header('uri')))
+                    self.handle_payload(last_buff)
+                if not trailing_newline:
+                    sys.stderr.write("No trailing \\n found\t({})\n".format(record.rec_headers.get_header('uri')))
 
             raw_iter.read_to_end(record)
 
