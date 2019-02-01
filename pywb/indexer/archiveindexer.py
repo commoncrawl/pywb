@@ -1,4 +1,5 @@
 from pywb.utils.canonicalize import canonicalize
+from pywb.utils.canonicalize import UrlCanonicalizeException
 
 from pywb.warcserver.inputrequest import MethodQueryCanonicalizer
 from pywb.utils.io import BUFF_SIZE
@@ -178,7 +179,12 @@ class DefaultRecordParser(object):
                 continue
 
             if entry.get('url') and not entry.get('urlkey'):
-                entry['urlkey'] = canonicalize(entry['url'], surt_ordered)
+                try:
+                    entry['urlkey'] = canonicalize(entry['url'], surt_ordered)
+                except UrlCanonicalizeException as e:
+                    sys.stderr.write('SURT canonicalization failed for {}: {}\n'.format(entry['url'], e))
+                    sys.stderr.write('Skipping record for indexing: {}\n'.format(entry['url']))
+                    continue
 
             compute_digest = False
 
